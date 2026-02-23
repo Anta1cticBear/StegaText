@@ -2,11 +2,11 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-from utils import limit_past, kl, entropy, bits2int, int2bits, is_sent_finish, num_same_from_beg
+from utils import limit_past, kl, entropy, bits2int, int2bits, is_sent_finish, num_same_from_beg, get_forbidden_token_ids
 
 def encode_arithmetic(model, enc, message, context, finish_sent=False, device='cuda', temp=1.0, precision=16, topk=50000, verbose=False):
 
-    context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
+    context = torch.tensor(context[-4094:], device=device, dtype=torch.long)
 
     max_val = 2**precision
     threshold = 2**(-precision)
@@ -38,8 +38,8 @@ def encode_arithmetic(model, enc, message, context, finish_sent=False, device='c
 
             logits, past = model(prev.unsqueeze(0), past=past)
             past = limit_past(past)
-            logits[0, -1, -1] = -1e20 # endoftext token can't happen
-            logits[0, -1, 628] = -1e20 # 2 newlines token can't happen
+            for _fid in get_forbidden_token_ids(enc):
+                logits[0, -1, _fid] = -1e20
             logits, indices = logits[0, -1, :].sort(descending=True)
             logits = logits.double()
             logits_temp = logits / temp
@@ -157,7 +157,7 @@ def decode_arithmetic(model, enc, text, context, device='cuda', temp=1.0, precis
         else:
             i += 1
 
-    context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
+    context = torch.tensor(context[-4094:], device=device, dtype=torch.long)
 
     max_val = 2**precision
     threshold = 2**(-precision)
@@ -171,8 +171,8 @@ def decode_arithmetic(model, enc, text, context, device='cuda', temp=1.0, precis
         while i < len(inp):
             logits, past = model(prev.unsqueeze(0), past=past)  # logits of size (1, sequence_length, hidden_size), 
             past = limit_past(past)
-            logits[0, -1, -1] = -1e20 # endoftext can't happen
-            logits[0, -1, 628] = -1e20 # 2 newlines can't happen
+            for _fid in get_forbidden_token_ids(enc):
+                logits[0, -1, _fid] = -1e20
             logits, indices = logits[0, -1, :].sort(descending=True)
             logits = logits.double()
             logits_temp = logits / temp

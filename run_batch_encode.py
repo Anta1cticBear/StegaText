@@ -31,7 +31,6 @@ def plaintext2bits(plaintext, context, model, enc, model_type, encryption_method
         info: a dictionary of encryption information
     """
     assert encryption_method in {"utf8", "arithmetic"}, f"Unsupported encryption method: {encryption_method}"
-    assert model_type in {"utf8", "gpt2"}, f"Unsupported model type: {model_type}"
 
     n_words = len(plaintext.split(" "))
     if encryption_method == "utf8":
@@ -41,10 +40,9 @@ def plaintext2bits(plaintext, context, model, enc, model_type, encryption_method
         message = ba.tolist()
     elif encryption_method == "arithmetic":
         n_subwords = len(enc.tokenize(plaintext))
-        if model_type == "gpt2":
-            context_tokens = [enc.encoder['<|endoftext|>']] + enc.encode(context)
-            plaintext += '<eos>'
-            message = decode_arithmetic(model, enc, plaintext, context_tokens, device=device, precision=40, topk=60000)
+        context_tokens = [enc.eos_token_id] + enc.encode(context)
+        plaintext += enc.eos_token
+        message = decode_arithmetic(model, enc, plaintext, context_tokens, device=device, precision=40, topk=60000)
     n_bits = len(message)
     info = {"n_words": n_words, "n_subwords": n_subwords, "n_bits": n_bits}
     return message, info
@@ -66,7 +64,6 @@ def bits2covertext(message, context, model, enc, model_type, steganography_metho
         info: a dictionary of steganography information
     """
     assert steganography_method in {"bins", "huffman", "arithmetic", "saac"}, f"Unsupported steganography method: {steganography_method}"
-    assert model_type in {"gpt2"}, f"Unsupported model type: {model_type}"
 
     # for huffman and bins coding
     block_size = args.get("block_size", 4)
@@ -89,8 +86,7 @@ def bits2covertext(message, context, model, enc, model_type, steganography_metho
     finish_sent = args.get("finish_sent", False)  # whether or not to force finish sent. If so, stats displayed will be for non-finished sentence
 
     # encode context
-    if model_type == "gpt2":
-        context_tokens = [enc.encoder['<|endoftext|>']] + enc.encode(context)
+    context_tokens = [enc.eos_token_id] + enc.encode(context)
 
     Hq = 0
     n_bits = len(message)
@@ -137,7 +133,7 @@ def main(args):
         with open(f"{dataset_path}/plaintext.txt", "r") as fin:
             plaintexts = [line.strip() for line in fin.readlines() if line.strip() != ""]
         print(f"Encoding {len(plaintexts)} plaintexts")
-    bin2words, words2bin = get_bins(len(enc.encoder), block_size)
+    bin2words, words2bin = get_bins(enc.vocab_size, block_size)
     args["bin2words"] = bin2words
     args["words2bin"] = words2bin
 
@@ -196,7 +192,7 @@ if __name__ == '__main__':
     parser.add_argument("-dataset_path", type=str, default="./datasets/drug/")
     parser.add_argument("-encrypt", type=str, default="cached", choices=["utf8", "arithmetic", "cached"])
     parser.add_argument("-encode", type=str, default="saac", choices=["bins", "huffman", "arithmetic", "saac"])
-    parser.add_argument("-lm", type=str, default="gpt2")
+    parser.add_argument("-lm", type=str, default="Qwen/Qwen2.5-3B")
     parser.add_argument("-device", type=str, default="0", help="your gpu device id")
     parser.add_argument("-block_size", type=int, default=4, help="block_size for bin/huffman encoding method")
     parser.add_argument("-precision", type=int, default=26, help="precision for arithmetic encoding method")

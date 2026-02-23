@@ -2,12 +2,12 @@ import torch
 import torch.nn.functional as F
 
 from huffman import HuffmanCoding
-from utils import kl, entropy, is_sent_finish, limit_past
+from utils import kl, entropy, is_sent_finish, limit_past, get_forbidden_token_ids
 
 def encode_huffman(model, enc, message, context, bits_per_word, finish_sent=False, device='cuda'):
     length = len(message)
 
-    context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
+    context = torch.tensor(context[-4094:], device=device, dtype=torch.long)
     
     prev = context
     output = context
@@ -28,8 +28,8 @@ def encode_huffman(model, enc, message, context, bits_per_word, finish_sent=Fals
             step_cnt += 1
             logits, past = model(prev.unsqueeze(0), past=past)
             past = limit_past(past)
-            logits[0, -1, -1] = -1e10 # endoftext can't happen
-            logits[0, -1, 628] = -1e10 # 2 newlines can't happen
+            for _fid in get_forbidden_token_ids(enc):
+                logits[0, -1, _fid] = -1e10
             logits, indices = logits[0, -1, :].sort(descending=True)
 
             # Get the top 2**bits options
@@ -91,7 +91,7 @@ def decode_huffman(model, enc, text, context, bits_per_word, device='cuda'):
         else:
             i += 1
 
-    context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
+    context = torch.tensor(context[-4094:], device=device, dtype=torch.long)
     prev = context
     past = None
 
@@ -99,13 +99,13 @@ def decode_huffman(model, enc, text, context, bits_per_word, device='cuda'):
     with torch.no_grad():
         i = 0
         while i < len(inp):
-            if past and past[0].shape[3] >= 1023:
+            if past and past[0][0].shape[2] >= 4095:
                 raise RuntimeError
 
             logits, past = model(prev.unsqueeze(0), past=past)
             past = limit_past(past)
-            logits[0, -1, -1] = -1e10 # endoftext can't happen
-            logits[0, -1, 628] = -1e10 # 2 newlines can't happen
+            for _fid in get_forbidden_token_ids(enc):
+                logits[0, -1, _fid] = -1e10
             logits, indices = logits[0, -1, :].sort(descending=True)
 
             # Get the top 2**bits options

@@ -1,5 +1,5 @@
-torch==1.4.0
-transformers==2.8.0
+torch>=2.0.0
+transformers>=4.40.0
 bitarray
-tqdm
 numpy
+tqdm

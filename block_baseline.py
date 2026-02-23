@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 import numpy as np
-from utils import kl, entropy, is_sent_finish, limit_past, bits2int, int2bits
+from utils import kl, entropy, is_sent_finish, limit_past, bits2int, int2bits, get_forbidden_token_ids
 
 # number of bins is 2^block_size
 # each bin contains vocab_size/2^block_size words
@@ -26,7 +26,7 @@ def get_bins(vocab_size, block_size):
 def encode_block(model, enc, message, context, block_size, bin2words, words2bin, finish_sent=False, device='cuda'):
     length = len(message)
 
-    context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
+    context = torch.tensor(context[-4094:], device=device, dtype=torch.long)
     
     prev = context
     output = context
@@ -44,8 +44,8 @@ def encode_block(model, enc, message, context, block_size, bin2words, words2bin,
         while i < length or (finish_sent and not sent_finish):
             logits, past = model(prev.unsqueeze(0), past=past)
             past = limit_past(past)
-            logits[0, -1, -1] = -1e10 # endoftext can't happen
-            logits[0, -1, 628] = -1e10 # 2 newlines can't happen
+            for _fid in get_forbidden_token_ids(enc):
+                logits[0, -1, _fid] = -1e10
             logits = logits[0, -1, :]
             log_probs = F.log_softmax(logits, dim=-1)
             
@@ -110,7 +110,7 @@ def decode_block(model, enc, text, context, block_size, bin2words, words2bin, de
         else:
             i += 1
 
-    context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
+    context = torch.tensor(context[-4094:], device=device, dtype=torch.long)
     prev = context
     past = None
 
@@ -118,14 +118,14 @@ def decode_block(model, enc, text, context, block_size, bin2words, words2bin, de
     with torch.no_grad():
         i = 0
         while i < len(inp):
-            if past and past[0].shape[3] >= 1023:
+            if past and past[0][0].shape[2] >= 4095:
                 raise RuntimeError
             bin_num = words2bin[inp[i]]
 
             logits, past = model(prev.unsqueeze(0), past=past)
             past = limit_past(past)
-            logits[0, -1, -1] = -1e10 # endoftext can't happen
-            logits[0, -1, 628] = -1e10 # 2 newlines can't happen
+            for _fid in get_forbidden_token_ids(enc):
+                logits[0, -1, _fid] = -1e10
 
             logits = logits[0, -1, :]
             filtered_logits = logits.clone()

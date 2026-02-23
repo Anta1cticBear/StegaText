@@ -52,8 +52,8 @@ def main(args):
         ba.frombytes(plaintext.encode('utf-8'))
         message = ba.tolist()
     elif encryption_method == "arithmetic":
-        message_ctx = [enc.encoder['<|endoftext|>']]
-        plaintext += '<eos>'
+        message_ctx = [enc.eos_token_id]
+        plaintext += enc.eos_token
         message = decode_arithmetic(model, enc, plaintext, message_ctx, device=device, precision=40, topk=60000)
     print(f"Encrypted message bits: {message}")
 
@@ -61,7 +61,7 @@ def main(args):
     print(f"Steganography encoding method: {steganography_method}")
     context_tokens = encode_context(context, enc)
     if steganography_method == 'bins':
-        bin2words, words2bin = get_bins(len(enc.encoder), block_size)
+        bin2words, words2bin = get_bins(enc.vocab_size, block_size)
         out, nll, kl, words_per_bit = encode_block(model, enc, message, context_tokens, block_size, bin2words, words2bin, device=device)
     elif steganography_method == 'huffman':
         out, nll, kl, words_per_bit = encode_huffman(model, enc, message, context_tokens, block_size, device=device)
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     parser.add_argument("-context", type=str, default="", help="context used for steganography, use a double-quotes if necessary")
     parser.add_argument("-encrypt", type=str, default="arithmetic", choices=["arithmetic", "utf8"])
     parser.add_argument("-encode", type=str, default="bins", choices=["bins", "huffman", "arithmetic", "saac"])
-    parser.add_argument("-lm", type=str, default="gpt2")
+    parser.add_argument("-lm", type=str, default="Qwen/Qwen2.5-3B")
     parser.add_argument("-device", type=str, default="0", help="your gpu device id")
     parser.add_argument("-block_size", type=int, default=4, help="block_size for bin/huffman encoding method")
     parser.add_argument("-precision", type=int, default=26, help="precision for arithmetic encoding method")
