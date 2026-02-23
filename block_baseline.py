@@ -109,7 +109,7 @@ def decode_block(model, enc, text, context, block_size, bin2words, words2bin, de
     with torch.no_grad():
         i = 0
         while i < len(inp):
-            if past and past[0][0].shape[2] >= 1023:
+            if past and past.get_seq_length() >= 1023:
                 raise RuntimeError
             bin_num = words2bin[inp[i]]
 

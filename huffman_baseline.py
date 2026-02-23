@@ -90,7 +90,7 @@ def decode_huffman(model, enc, text, context, bits_per_word, device='cuda'):
     with torch.no_grad():
         i = 0
         while i < len(inp):
-            if past and past[0][0].shape[2] >= 1023:
+            if past and past.get_seq_length() >= 1023:
                 raise RuntimeError
 
             logits, past = model(prev.unsqueeze(0), past=past)

@@ -12,19 +12,7 @@ class ModelWrapper:
 
     def __call__(self, input_ids, past=None):
         outputs = self.model(input_ids, past_key_values=past, use_cache=True)
-        past_kv = outputs.past_key_values
-        # Normalize to tuple of (key, value) tuples for compatibility.
-        # Modern transformers may return DynamicCache; convert via .layers attribute.
-        if past_kv is not None and not isinstance(past_kv, tuple):
-            if hasattr(past_kv, 'layers'):
-                past_kv = tuple(
-                    (layer.keys, layer.values) for layer in past_kv.layers
-                )
-            else:
-                past_kv = tuple(
-                    (past_kv[i][0], past_kv[i][1]) for i in range(len(past_kv))
-                )
-        return outputs.logits, past_kv
+        return outputs.logits, outputs.past_key_values
 
     def to(self, device):
         self.model.to(device)
@@ -38,14 +26,11 @@ class ModelWrapper:
 def limit_past(past):
     if past is None:
         return past
-    # Modern format: tuple of (key, value) tuples per layer
-    # Each key/value has shape (batch, num_heads, seq_len, head_dim)
-    new_past = []
-    for layer_past in past:
-        new_past.append(
-            (layer_past[0][:, :, -1022:, :], layer_past[1][:, :, -1022:, :])
-        )
-    return tuple(new_past)
+    # DynamicCache: trim each layer's keys/values to keep the last 1022 tokens
+    for layer in past.layers:
+        layer.keys = layer.keys[:, :, -1022:, :]
+        layer.values = layer.values[:, :, -1022:, :]
+    return past
 
 def kl(q, logq, logp):
     res = q*(logq-logp)/0.69315
