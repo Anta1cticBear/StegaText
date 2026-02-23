@@ -13,11 +13,17 @@ class ModelWrapper:
     def __call__(self, input_ids, past=None):
         outputs = self.model(input_ids, past_key_values=past, use_cache=True)
         past_kv = outputs.past_key_values
-        # Normalize to tuple of (key, value) tuples for compatibility
+        # Normalize to tuple of (key, value) tuples for compatibility.
+        # Modern transformers may return DynamicCache; convert via .layers attribute.
         if past_kv is not None and not isinstance(past_kv, tuple):
-            past_kv = tuple(
-                (layer.keys, layer.values) for layer in past_kv.layers
-            )
+            if hasattr(past_kv, 'layers'):
+                past_kv = tuple(
+                    (layer.keys, layer.values) for layer in past_kv.layers
+                )
+            else:
+                past_kv = tuple(
+                    (past_kv[i][0], past_kv[i][1]) for i in range(len(past_kv))
+                )
         return outputs.logits, past_kv
 
     def to(self, device):
@@ -89,12 +95,17 @@ def get_model(seed=1234, model_name='Qwen/Qwen3-0.6B', device_id="0"):
 
     enc = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
-    # Build encoder/decoder dicts for compatibility with GPT2-style code
+    # Add encoder/decoder dicts for compatibility with GPT2-style code throughout
+    # the codebase (e.g., enc.encoder[token_str], enc.decoder[token_id]).
+    # These attributes are added directly to the tokenizer instance for simplicity,
+    # as they are used pervasively in encode/decode functions across all modules.
     vocab = enc.get_vocab()
     enc.encoder = vocab
     enc.decoder = {v: k for k, v in vocab.items()}
 
-    # Wrap encode to not add special tokens by default (matching GPT2 behavior)
+    # Wrap encode to not add special tokens by default (matching GPT2 behavior).
+    # The original GPT2Tokenizer.encode() did not add special tokens, and the
+    # steganography algorithms rely on this for correct bit encoding/decoding.
     _original_encode = enc.encode
     def _encode_no_special(text, **kwargs):
         kwargs.setdefault('add_special_tokens', False)
