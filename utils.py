@@ -2,24 +2,44 @@ import torch
 import numpy as np
 import bitarray
 
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-def decode(self, token_ids, **kwargs):
-    filtered_tokens = self.convert_ids_to_tokens(token_ids)
-    text = self.convert_tokens_to_string(filtered_tokens)
-    return text
-GPT2Tokenizer.decode = decode
 
-def _convert_token_to_id(self, token):
-    return self.encoder.get(token, 0)
-GPT2Tokenizer._convert_token_to_id = _convert_token_to_id
+class ModelWrapper:
+    """Wrapper to make modern HF models return (logits, past) tuples like old GPT2."""
+    def __init__(self, model):
+        self.model = model
+
+    def __call__(self, input_ids, past=None):
+        outputs = self.model(input_ids, past_key_values=past, use_cache=True)
+        past_kv = outputs.past_key_values
+        # Normalize to tuple of (key, value) tuples for compatibility
+        if past_kv is not None and not isinstance(past_kv, tuple):
+            past_kv = tuple(
+                (layer.keys, layer.values) for layer in past_kv.layers
+            )
+        return outputs.logits, past_kv
+
+    def to(self, device):
+        self.model.to(device)
+        return self
+
+    def eval(self):
+        self.model.eval()
+        return self
 
 
 def limit_past(past):
-    past = list(past)
-    for i in range(len(past)):
-        past[i] = past[i][:, :, :, -1022:]
-    return past
+    if past is None:
+        return past
+    # Modern format: tuple of (key, value) tuples per layer
+    # Each key/value has shape (batch, num_heads, seq_len, head_dim)
+    new_past = []
+    for layer_past in past:
+        new_past.append(
+            (layer_past[0][:, :, -1022:, :], layer_past[1][:, :, -1022:, :])
+        )
+    return tuple(new_past)
 
 def kl(q, logq, logp):
     res = q*(logq-logp)/0.69315
@@ -58,26 +78,33 @@ def num_same_from_beg(bits1, bits2):
     return i
 
 def encode_context(raw_text, enc):
-    context_tokens = [enc.encoder['<|endoftext|>']] + enc.encode(raw_text)
+    context_tokens = [enc.eos_token_id] + enc.encode(raw_text)
     return context_tokens
 
-# Use gpt2-medium for 345M param model
-# Use gpt2-large for 774M param model
-def get_model(seed=1234, model_name='gpt2', device_id="0"):
+def get_model(seed=1234, model_name='Qwen/Qwen3-0.6B', device_id="0"):
     np.random.seed(seed)
     torch.random.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     device = torch.device(f"cuda:{device_id}" if torch.cuda.is_available() else "cpu")
 
-    enc = GPT2Tokenizer.from_pretrained(model_name)
-    enc.unk_token = None
-    enc.bos_token = None
-    enc.eos_token = None
-    
-    model = GPT2LMHeadModel.from_pretrained(model_name)
+    enc = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+
+    # Build encoder/decoder dicts for compatibility with GPT2-style code
+    vocab = enc.get_vocab()
+    enc.encoder = vocab
+    enc.decoder = {v: k for k, v in vocab.items()}
+
+    # Wrap encode to not add special tokens by default (matching GPT2 behavior)
+    _original_encode = enc.encode
+    def _encode_no_special(text, **kwargs):
+        kwargs.setdefault('add_special_tokens', False)
+        return _original_encode(text, **kwargs)
+    enc.encode = _encode_no_special
+
+    raw_model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True)
+    model = ModelWrapper(raw_model)
     model.to(device)
     model.eval()
-    #model.double()
 
     return enc, model, device
 

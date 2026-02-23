@@ -44,8 +44,7 @@ def encode_block(model, enc, message, context, block_size, bin2words, words2bin,
         while i < length or (finish_sent and not sent_finish):
             logits, past = model(prev.unsqueeze(0), past=past)
             past = limit_past(past)
-            logits[0, -1, -1] = -1e10 # endoftext can't happen
-            logits[0, -1, 628] = -1e10 # 2 newlines can't happen
+            logits[0, -1, enc.eos_token_id] = -1e10 # endoftext can't happen
             logits = logits[0, -1, :]
             log_probs = F.log_softmax(logits, dim=-1)
             
@@ -101,14 +100,6 @@ def decode_block(model, enc, text, context, block_size, bin2words, words2bin, de
     # inp is a list of token indices
     # context is a list of token indices
     inp = enc.encode(text)
-    i = 0
-    while i < len(inp):
-        if inp[i] == 628:
-            inp[i] = 198
-            inp[i+1:i+1] = [198]
-            i += 2
-        else:
-            i += 1
 
     context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
     prev = context
@@ -118,14 +109,13 @@ def decode_block(model, enc, text, context, block_size, bin2words, words2bin, de
     with torch.no_grad():
         i = 0
         while i < len(inp):
-            if past and past[0].shape[3] >= 1023:
+            if past and past[0][0].shape[2] >= 1023:
                 raise RuntimeError
             bin_num = words2bin[inp[i]]
 
             logits, past = model(prev.unsqueeze(0), past=past)
             past = limit_past(past)
-            logits[0, -1, -1] = -1e10 # endoftext can't happen
-            logits[0, -1, 628] = -1e10 # 2 newlines can't happen
+            logits[0, -1, enc.eos_token_id] = -1e10 # endoftext can't happen
 
             logits = logits[0, -1, :]
             filtered_logits = logits.clone()
