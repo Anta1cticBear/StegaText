@@ -4,7 +4,7 @@ This repo contains the implementations of several linguistic steganography metho
 
 ## Dependency
 
-You need to install all dependent librarys in `requirements.txt` file. Besides, you need to download the `gpt2-medium` model (345M parameter) from [transformers library](https://huggingface.co/transformers/pretrained_models.html)
+You need to install all dependent librarys in `requirements.txt` file. Besides, you need to download the `Qwen/Qwen3-0.6B` model from [HuggingFace](https://huggingface.co/Qwen/Qwen3-0.6B). The model will be automatically downloaded when you run the scripts for the first time.
 
 ## Datasets
 

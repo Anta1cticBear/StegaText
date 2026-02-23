@@ -38,8 +38,7 @@ def encode_arithmetic(model, enc, message, context, finish_sent=False, device='c
 
             logits, past = model(prev.unsqueeze(0), past=past)
             past = limit_past(past)
-            logits[0, -1, -1] = -1e20 # endoftext token can't happen
-            logits[0, -1, 628] = -1e20 # 2 newlines token can't happen
+            logits[0, -1, enc.eos_token_id] = -1e20 # endoftext token can't happen
             logits, indices = logits[0, -1, :].sort(descending=True)
             logits = logits.double()
             logits_temp = logits / temp
@@ -147,15 +146,6 @@ def decode_arithmetic(model, enc, text, context, device='cuda', temp=1.0, precis
     # inp is a list of token indices
     # context is a list of token indices
     inp = enc.encode(text)
-    # common BPE error case: 198, 198 (2 newlines) is interpretted as 628 (2 newlines)
-    i = 0
-    while i < len(inp):
-        if inp[i] == 628:
-            inp[i] = 198
-            inp[i+1:i+1] = [198]
-            i += 2
-        else:
-            i += 1
 
     context = torch.tensor(context[-1022:], device=device, dtype=torch.long)
 
@@ -171,8 +161,7 @@ def decode_arithmetic(model, enc, text, context, device='cuda', temp=1.0, precis
         while i < len(inp):
             logits, past = model(prev.unsqueeze(0), past=past)  # logits of size (1, sequence_length, hidden_size), 
             past = limit_past(past)
-            logits[0, -1, -1] = -1e20 # endoftext can't happen
-            logits[0, -1, 628] = -1e20 # 2 newlines can't happen
+            logits[0, -1, enc.eos_token_id] = -1e20 # endoftext can't happen
             logits, indices = logits[0, -1, :].sort(descending=True)
             logits = logits.double()
             logits_temp = logits / temp
@@ -215,11 +204,6 @@ def decode_arithmetic(model, enc, text, context, device='cuda', temp=1.0, precis
                 true_token_text = enc.decoder[inp[i]]
                 for rank_idx in range(k):
                     prop_token_text = enc.decoder[indices[rank_idx].item()]
-                    # common case that is not caught
-                    if inp[i] == 128 and indices[rank_idx] == 198:
-                        rank = rank_idx
-                        inp[i] = indices[rank_idx].item()
-                        break
                     
                     # Is there a more likely prefix token that could be the actual token generated?
                     if len(prop_token_text) <= len(true_token_text) and \

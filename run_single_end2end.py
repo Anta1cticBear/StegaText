@@ -52,7 +52,7 @@ def main(args):
         ba.frombytes(plaintext.encode('utf-8'))
         message = ba.tolist()
     elif encryption_method == "arithmetic":
-        message_ctx = [enc.encoder['<|endoftext|>']]
+        message_ctx = [enc.eos_token_id]
         plaintext += '<eos>'
         message = decode_arithmetic(model, enc, plaintext, message_ctx, device=device, precision=40, topk=60000)
     print(f"Encrypted message bits: {message}")
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     parser.add_argument("-context", type=str, default="", help="context used for steganography, use a double-quotes if necessary")
     parser.add_argument("-encrypt", type=str, default="arithmetic", choices=["arithmetic", "utf8"])
     parser.add_argument("-encode", type=str, default="bins", choices=["bins", "huffman", "arithmetic", "saac"])
-    parser.add_argument("-lm", type=str, default="gpt2")
+    parser.add_argument("-lm", type=str, default="Qwen/Qwen3-0.6B")
     parser.add_argument("-device", type=str, default="0", help="your gpu device id")
     parser.add_argument("-block_size", type=int, default=4, help="block_size for bin/huffman encoding method")
     parser.add_argument("-precision", type=int, default=26, help="precision for arithmetic encoding method")
