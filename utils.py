@@ -26,7 +26,8 @@ class ModelWrapper:
 def limit_past(past):
     if past is None:
         return past
-    # DynamicCache: trim each layer's keys/values to keep the last 1022 tokens
+    # Trim each layer's keys/values in-place to keep the last 1022 tokens.
+    # The caller always reassigns: past = limit_past(past), so in-place is safe.
     for layer in past.layers:
         layer.keys = layer.keys[:, :, -1022:, :]
         layer.values = layer.values[:, :, -1022:, :]
