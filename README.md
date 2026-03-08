@@ -4,7 +4,7 @@ This repo contains the implementations of several linguistic steganography metho
 
 ## New: Prompt Injection Attack Extraction
 
-We've added a tool to extract system prompt extraction attack phrases from red team datasets. See `extract_prompt_injection_attacks.py` for details.
+We've added a tool to extract system prompt extraction attack phrases from red team datasets. The tool generates **100 English-only red team prompts** (25 per category). See `extract_prompt_injection_attacks.py` for details.
 
 ### Quick Start
 
