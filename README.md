@@ -2,6 +2,28 @@
 
 This repo contains the implementations of several linguistic steganography methods in paper "Near-imperceptible Neural Linguistic Steganography via Self-Adjusting Arithmetic Coding" published in EMNLP 2020.
 
+## New: Prompt Injection Attack Extraction
+
+We've added a tool to extract system prompt extraction attack phrases from red team datasets. The tool generates **100 English-only red team prompts** (25 per category). See `extract_prompt_injection_attacks.py` for details.
+
+### Quick Start
+
+```bash
+# Generate example prompts (works offline)
+python extract_prompt_injection_attacks.py --mode examples
+
+# Download and extract from datasets (requires internet)
+python extract_prompt_injection_attacks.py --mode download
+```
+
+The tool extracts and categorizes prompts into:
+1. **Direct extraction attacks** (直接提取攻击): Direct commands to output system prompts
+2. **Context ignoring jailbreak** (上下文忽略越狱): Role-playing to escape safety controls
+3. **Cognitive deception** (认知欺骗): Inducing leakage in compliant contexts
+4. **Encoding bypass strategies** (编码绕过策略): Using translation/encoding to bypass filters
+
+Results are saved to `./prompt_injection_attacks/` directory. See the [extraction results README](./prompt_injection_attacks/README.md) for more details.
+
 ## Dependency
 
 You need to install all dependent librarys in `requirements.txt` file. Besides, you need to download the `gpt2-medium` model (345M parameter) from [transformers library](https://huggingface.co/transformers/pretrained_models.html)
